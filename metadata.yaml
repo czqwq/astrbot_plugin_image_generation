@@ -1,6 +1,6 @@
-name: astrbot_plugin_siliconflow-shouban
-desc: 接入硅基流动画图，图片编辑，可自定义预设
-help:  # 插件的帮助信息
-version: v1.0.0 # 插件版本号。格式：v1.1.1 或者 v1.1
-author: shskjw
-repo: https://github.com/shskjw/astrbot_plugin_siliconflow-shouban
+name: astrbot_plugin_image_generation
+desc: 适配图像生成模型，图片编辑，可自定义预设
+help: 通过第三方api进行图像生成的插件，支持图生图和文生图，可自定义预设指令
+version: v2.0.0
+author: MoonShadow1976
+repo: https://github.com/MoonShadow1976/astrbot_plugin_image_generation

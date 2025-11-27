@@ -21,11 +21,11 @@ from astrbot.core.platform.astr_message_event import AstrMessageEvent
 
 
 @register(
-    "astrbot_plugin_shoubanhua",
-    "shskjw",
-    "通过第三方api进行手办化等功能",
-    "1.0.0", 
-    "https://github.com/shkjw/astrbot_plugin_shoubanhua",
+    "astrbot_plugin_image_generation",
+    "MoonShadow1976",
+    "通过第三方api进行图像生成的插件，支持图生图和文生图，可自定义预设指令。",
+    "2.0.0", 
+    "https://github.com/MoonShadow1976/astrbot_plugin_image_generation",
 )
 class FigurineProPlugin(Star):
     class ImageWorkflow:
@@ -136,6 +136,15 @@ class FigurineProPlugin(Star):
         self.key_index = 0
         self.key_lock = asyncio.Lock()
         self.iwf: Optional[FigurineProPlugin.ImageWorkflow] = None
+
+        # 区别不同风格的响应格式
+        # 硅基流动的响应格式: {"images": [{"url": "..."}]}
+        # 智谱AI的响应格式: {"data": [{"url": "..."}]}
+        self.form: dict[str, str] = {
+            "siliconflow": "images",
+            "bigmodel": "data",
+        }
+        self.data_form: str = self.form.get(self.conf.get("api_from"), "images")
 
     async def initialize(self):
         use_proxy = self.conf.get("use_proxy", False)
@@ -551,15 +560,13 @@ class FigurineProPlugin(Star):
     def _extract_image_url_from_response(self, data: Dict[str, Any]) -> str | None:
         """
         从 API 响应中提取图片 URL。
-        适配 硅基流动 (SiliconFlow) 的响应格式。
         """
         try:
-            # 硅基流动的响应格式: {"images": [{"url": "..."}]}
-            url = data["images"][0]["url"]
+            url = data[self.data_form][0]["url"]
             logger.info(f"成功从 API 响应中提取到 URL: {url[:50]}...")
             return url
         except (IndexError, TypeError, KeyError):
-            logger.warning(f"未能在响应中找到 'images[0].url'，原始响应 (截断): {str(data)[:200]}")
+            logger.warning(f"未能在响应中找到 '{self.data_form}[0].url'，原始响应 (截断): {str(data)[:200]}")
             return None
 
     async def _call_api(self, image_bytes_list: List[bytes], prompt: str) -> bytes | str:
@@ -574,12 +581,12 @@ class FigurineProPlugin(Star):
         if not model_name:
             return "模型名称 (model) 未配置"
 
-        # --- 构建 硅基流动 (SiliconFlow) API payload ---
+        # --- 构建 API payload ---
         payload: Dict[str, Any] = {
             "model": model_name,
             "prompt": prompt,
             # "response_format": "url" # 默认为 url，URL 1小时有效
-            # 根据 SiliconFlow 文档，可以添加 image_size, negative_prompt 等
+            # 根据文档，可以添加 image_size, negative_prompt 等
             # 但为保持插件简洁性，暂不从 conf_schema 添加，依赖模型默认值
         }
 
@@ -605,7 +612,7 @@ class FigurineProPlugin(Star):
         # else:
         # 这是文生图，payload 保持原样 (model + prompt)
 
-        logger.info(f"发送到 SiliconFlow API: URL={api_url}, Model={model_name}, HasImage={bool(image_bytes_list)}")
+        logger.info(f"发送到 {self.conf.get('api_from')} API: URL={api_url}, Model={model_name}, HasImage={bool(image_bytes_list)}")
 
         try:
             if not self.iwf: return "ImageWorkflow 未初始化"
@@ -618,7 +625,7 @@ class FigurineProPlugin(Star):
 
                 data = await resp.json()
 
-                if "images" not in data or not data["images"]:
+                if self.data_form not in data or not data[self.data_form]:
                     error_msg = f"API响应中未找到图片数据: {str(data)[:500]}..."
                     logger.error(f"API响应中未找到图片数据: {data}")
                     if "error" in data:
@@ -636,7 +643,7 @@ class FigurineProPlugin(Star):
                     b64_data = gen_image_url.split(",", 1)[1]
                     return base64.b64decode(b64_data)
                 else:
-                    # SiliconFlow 返回的是 URL，需要下载
+                    # 返回的是 URL，需要下载
                     return await self.iwf._download_image(gen_image_url) or "下载生成的图片失败"
         except asyncio.TimeoutError:
             logger.error("API 请求超时");
