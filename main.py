@@ -172,7 +172,7 @@ class FigurineProPlugin(Star):
                     logger.warning(f"跳过格式错误的 prompt (缺少冒号): {item}")
             except ValueError:
                 logger.warning(f"跳过格式错误的 prompt: {item}")
-        logger.info(f"加载了 {len(self.prompt_map)} 个 prompts。")
+        logger.info(f"加载了 {len(self.prompt_map)} 个 prompts。.")
 
     @filter.event_message_type(filter.EventMessageType.ALL, priority=5)
     async def on_figurine_request(self, event: AstrMessageEvent):
@@ -671,9 +671,10 @@ class FigurineProPlugin(Star):
         api_key = await self._get_api_key()
         if not api_key: return "无可用的 API Key"
         
+        # 阿里云千问API使用小写的bearer
         headers = {
             "Content-Type": "application/json", 
-            "Authorization": f"Bearer {api_key}",
+            "Authorization": f"bearer {api_key}",
             "X-DashScope-Async": "enable"
         }
 
