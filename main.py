@@ -143,6 +143,7 @@ class FigurineProPlugin(Star):
         self.form: dict[str, str] = {
             "siliconflow": "images",
             "bigmodel": "data",
+            "aliyun": "output",  # 阿里云千问使用output字段
         }
         self.data_form: str = self.form.get(self.conf.get("api_from"), "images")
 
@@ -570,6 +571,12 @@ class FigurineProPlugin(Star):
             return None
 
     async def _call_api(self, image_bytes_list: List[bytes], prompt: str) -> bytes | str:
+        # 检查是否使用阿里云千问API
+        is_aliyun_qwen = self.conf.get("api_from") == "aliyun"
+        
+        if is_aliyun_qwen:
+            return await self._call_aliyun_qwen_api(image_bytes_list, prompt)
+            
         api_url = self.conf.get("api_url")
         if not api_url: return "API URL 未配置"
         api_key = await self._get_api_key()
@@ -650,6 +657,134 @@ class FigurineProPlugin(Star):
             return "请求超时"
         except Exception as e:
             logger.error(f"调用 API 时发生未知错误: {e}", exc_info=True);
+            return f"发生未知错误: {e}"
+
+    async def _call_aliyun_qwen_api(self, image_bytes_list: List[bytes], prompt: str) -> bytes | str:
+        """
+        调用阿里云千问图像生成API
+        """
+        api_url = self.conf.get("api_url")
+        if not api_url: 
+            # 如果没有配置API URL，则使用阿里云千问默认URL
+            api_url = "https://dashscope-intl.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis"
+            
+        api_key = await self._get_api_key()
+        if not api_key: return "无可用的 API Key"
+        
+        headers = {
+            "Content-Type": "application/json", 
+            "Authorization": f"Bearer {api_key}",
+            "X-DashScope-Async": "enable"
+        }
+
+        # --- 从配置读取模型名称 ---
+        model_name = self.conf.get("model")  # "model" 是必须的，从配置中读取
+        if not model_name:
+            return "模型名称 (model) 未配置"
+
+        # --- 构建 API payload ---
+        payload: Dict[str, Any] = {
+            "model": model_name,
+            "input": {
+                "prompt": prompt,
+            },
+            "parameters": {
+                "size": "1024*1024",  # 默认尺寸
+                "n": 1,  # 生成图片数量
+            }
+        }
+
+        # --- 添加图片 (图生图) ---
+        if image_bytes_list:
+            try:
+                # 阿里云千问API支持图生图，需要将图片转为base64
+                img_b64 = base64.b64encode(image_bytes_list[0]).decode("utf-8")
+                payload["input"]["image"] = f"data:image/png;base64,{img_b64}"
+            except Exception as e:
+                logger.error(f"Base64 编码图片时出错: {e}", exc_info=True)
+                return f"图片编码失败: {e}"
+
+        logger.info(f"发送到阿里云千问 API: URL={api_url}, Model={model_name}, HasImage={bool(image_bytes_list)}")
+
+        try:
+            if not self.iwf: return "ImageWorkflow 未初始化"
+            
+            # 第一步：创建任务
+            async with self.iwf.session.post(api_url, json=payload, headers=headers, proxy=self.iwf.proxy,
+                                             timeout=120) as resp:
+                if resp.status != 200:
+                    error_text = await resp.text()
+                    logger.error(f"阿里云千问 API 请求失败: HTTP {resp.status}, 响应: {error_text}")
+                    return f"API请求失败 (HTTP {resp.status}): {error_text[:200]}"
+
+                data = await resp.json()
+                
+                # 检查是否有task_id
+                if "output" not in data or "task_id" not in data["output"]:
+                    error_msg = f"API响应中未找到task_id: {str(data)[:500]}..."
+                    logger.error(f"API响应中未找到task_id: {data}")
+                    if "code" in data:
+                        return f"API错误 {data['code']}: {data.get('message', '')}"
+                    return error_msg
+                
+                task_id = data["output"]["task_id"]
+                logger.info(f"获取到任务ID: {task_id}")
+
+            # 第二步：轮询任务结果
+            poll_url = f"https://dashscope-intl.aliyuncs.com/api/v1/tasks/{task_id}"
+            retry_count = 0
+            max_retries = 30  # 最多轮询30次
+            
+            while retry_count < max_retries:
+                await asyncio.sleep(5)  # 等待5秒后查询
+                
+                async with self.iwf.session.get(poll_url, headers={"Authorization": f"Bearer {api_key}"}, 
+                                                proxy=self.iwf.proxy, timeout=30) as resp:
+                    if resp.status != 200:
+                        error_text = await resp.text()
+                        logger.error(f"轮询任务状态失败: HTTP {resp.status}, 响应: {error_text}")
+                        return f"轮询任务状态失败 (HTTP {resp.status}): {error_text[:200]}"
+                    
+                    result_data = await resp.json()
+                    
+                    task_status = result_data.get("output", {}).get("task_status", "")
+                    logger.info(f"任务状态: {task_status}")
+                    
+                    if task_status == "SUCCEEDED":
+                        # 任务成功完成
+                        results = result_data.get("output", {}).get("results", [])
+                        if not results:
+                            return "API响应中未找到生成的图片"
+                        
+                        image_url = results[0].get("url")
+                        if not image_url:
+                            return "API响应中未找到图片URL"
+                        
+                        # 下载图片
+                        return await self.iwf._download_image(image_url) or "下载生成的图片失败"
+                        
+                    elif task_status == "FAILED":
+                        # 任务失败
+                        error_msg = result_data.get("output", {}).get("message", "任务执行失败")
+                        return f"图片生成任务失败: {error_msg}"
+                        
+                    elif task_status in ["RUNNING", "PENDING"]:
+                        # 任务仍在运行中，继续轮询
+                        retry_count += 1
+                        continue
+                        
+                    else:
+                        # 未知状态
+                        return f"未知的任务状态: {task_status}"
+            
+            # 轮询超时
+            return "图片生成超时，请稍后再试"
+            
+        except asyncio.TimeoutError:
+            logger.error("阿里云千问 API 请求超时")
+            return "请求超时"
+        except Exception as e:
+            logger.error(f"调用阿里云千问 API 时发生未知错误: {e}", exc_info=True)
             return f"发生未知错误: {e}"
 
     async def terminate(self):

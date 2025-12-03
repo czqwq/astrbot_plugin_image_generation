@@ -1,24 +1,25 @@
 {
     "api_from": {
         "description": "API来源选择",
-        "hint": "选择你所使用的API服务商{siliconflow:硅基流动, bigmodel:智谱AI}",
+        "hint": "选择你所使用的API服务商{siliconflow:硅基流动, bigmodel:智谱AI, aliyun:阿里云千问}",
         "type": "string",
         "default": "siliconflow",
         "options": [
           "siliconflow",
-          "bigmodel"
+          "bigmodel",
+          "aliyun"
         ]
     },        
     "api_url": {
         "description": "【通用】API的URL地址",
         "type": "string",
-        "hint": "图生图和文生图功能均使用此URL。默认为(硅基流动) https://api.siliconflow.cn/v1/images/generations",
+        "hint": "图生图和文生图功能均使用此URL。默认为(硅基流动) https://api.siliconflow.cn/v1/images/generations，阿里云千问API会使用默认URL除非特别指定",
         "default": "https://api.siliconflow.cn/v1/images/generations"
     },
     "model": {
         "description": "【通用】默认模型名称",
         "type": "string",
-        "hint": "图生图和文生图功能均使用此模型。",
+        "hint": "图生图和文生图功能均使用此模型。对于阿里云千问，可以使用如 qwen-image 或 wanx2.0-t2i-turbo 等模型",
         "default": "Qwen/Qwen-Image-Edit-2509"
     },
     "api_keys": {
