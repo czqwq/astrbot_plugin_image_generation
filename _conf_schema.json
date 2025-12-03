@@ -13,7 +13,7 @@
     "api_url": {
         "description": "【通用】API的URL地址",
         "type": "string",
-        "hint": "图生图和文生图功能均使用此URL。默认为(硅基流动) https://api.siliconflow.cn/v1/images/generations，阿里云千问API会使用默认URL除非特别指定",
+        "hint": "图生图和文生图功能均使用此URL。默认为(硅基流动) https://api.siliconflow.cn/v1/images/generations，阿里云千问API会使用默认URL除非特别指定。如需使用中国大陆地区API，请填写: https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis",
         "default": "https://api.siliconflow.cn/v1/images/generations"
     },
     "model": {

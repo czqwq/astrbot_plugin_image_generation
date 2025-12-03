@@ -663,9 +663,11 @@ class FigurineProPlugin(Star):
         """
         调用阿里云千问图像生成API
         """
+        # 获取API URL配置，支持不同地域
         api_url = self.conf.get("api_url")
         if not api_url: 
-            # 如果没有配置API URL，则使用阿里云千问默认URL
+            # 如果没有配置API URL，则使用阿里云千问默认URL（国际版）
+            # 根据阿里云文档，图像生成API使用特定的端点
             api_url = "https://dashscope-intl.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis"
             
         api_key = await self._get_api_key()
@@ -732,14 +734,21 @@ class FigurineProPlugin(Star):
                 logger.info(f"获取到任务ID: {task_id}")
 
             # 第二步：轮询任务结果
-            poll_url = f"https://dashscope-intl.aliyuncs.com/api/v1/tasks/{task_id}"
+            # 根据API URL确定轮询URL，支持不同地域
+            if "dashscope-intl.aliyuncs.com" in api_url:
+                # 国际版URL
+                poll_url = f"https://dashscope-intl.aliyuncs.com/api/v1/tasks/{task_id}"
+            else:
+                # 默认国内版URL
+                poll_url = f"https://dashscope.aliyuncs.com/api/v1/tasks/{task_id}"
+                
             retry_count = 0
             max_retries = 30  # 最多轮询30次
             
             while retry_count < max_retries:
                 await asyncio.sleep(5)  # 等待5秒后查询
                 
-                async with self.iwf.session.get(poll_url, headers={"Authorization": f"Bearer {api_key}"}, 
+                async with self.iwf.session.get(poll_url, headers={"Authorization": f"bearer {api_key}"}, 
                                                 proxy=self.iwf.proxy, timeout=30) as resp:
                     if resp.status != 200:
                         error_text = await resp.text()
