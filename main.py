@@ -692,10 +692,13 @@ class FigurineProPlugin(Star):
                 "prompt": prompt,
             },
             "parameters": {
-                "size": "1024*1024",  # 默认尺寸
                 "n": 1,  # 生成图片数量
             }
         }
+
+        # 获取阿里云千问图像尺寸配置
+        image_size = self.conf.get("aliyun_qwen_image_size", "1328*1328")
+        payload["parameters"]["size"] = image_size
 
         # --- 添加图片 (图生图) ---
         if image_bytes_list:

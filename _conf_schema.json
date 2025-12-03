@@ -22,6 +22,19 @@
         "hint": "图生图和文生图功能均使用此模型。对于阿里云千问，可以使用如 qwen-image 或 wanx2.0-t2i-turbo 等模型",
         "default": "Qwen/Qwen-Image-Edit-2509"
     },
+    "aliyun_qwen_image_size": {
+        "description": "【阿里云千问专用】图像尺寸",
+        "type": "string",
+        "hint": "阿里云千问API支持的图像尺寸: 1664*928, 1472*1140, 1328*1328, 1140*1472, 928*1664",
+        "default": "1328*1328",
+        "options": [
+            "1664*928",
+            "1472*1140",
+            "1328*1328",
+            "1140*1472",
+            "928*1664"
+        ]
+    },
     "api_keys": {
         "description": "API 密钥列表",
         "type": "list",
